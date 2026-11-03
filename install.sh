@@ -10,7 +10,8 @@ RAW=https://raw.githubusercontent.com/bolgov0zero/Linstall/main
 command -v apt-get >/dev/null || { echo "Нужен Debian или Ubuntu (apt-get)."; exit 1; }
 
 export DEBIAN_FRONTEND=noninteractive
-if ! command -v python3 >/dev/null || ! python3 -c 'import venv, ensurepip' 2>/dev/null; then
+if ! command -v python3 >/dev/null || ! python3 -c 'import venv, ensurepip' 2>/dev/null \
+   || ! command -v curl >/dev/null; then
   apt-get update -y
   apt-get install -y python3 python3-venv python3-pip curl ca-certificates
 fi

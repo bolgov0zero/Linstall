@@ -8,6 +8,18 @@ TUI-скрипт для Debian и Ubuntu: отмечаешь нужное, на�
 curl -fsSL https://raw.githubusercontent.com/bolgov0zero/Linstall/main/install.sh | bash
 ```
 
+Если curl в системе нет (так бывает на чистом Debian), сначала поставь его:
+
+```bash
+apt-get update && apt-get install -y curl
+```
+
+Или запусти через wget:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/bolgov0zero/Linstall/main/install.sh | bash
+```
+
 Нужен root. Скрипт сам поставит Python и [Textual](https://github.com/Textualize/textual) в `/opt/linstall`.
 
 ## Что умеет

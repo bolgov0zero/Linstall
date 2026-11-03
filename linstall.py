@@ -267,11 +267,19 @@ def run_neofetch(r, v):
         r.apt("fastfetch")
 
 
+def ensure_curl(r: Runner) -> None:
+    """curl есть не в каждой системе, а скрипты LinFW и Docker скачиваются им."""
+    if r.demo or not shutil.which("curl"):
+        r.apt("curl ca-certificates")
+
+
 def run_linfw(r, v):
+    ensure_curl(r)
     r.must(f"curl -fsSL {LINFW_URL} | bash")
 
 
 def run_docker(r, v):
+    ensure_curl(r)
     r.must("curl -fsSL https://get.docker.com | sh")
     r.must("docker compose version > /dev/null 2>&1 || apt-get install -y docker-compose-plugin")
 
