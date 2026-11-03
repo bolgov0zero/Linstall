@@ -465,6 +465,28 @@ class ChoiceModal(ModalScreen[Optional[str]]):
         self.dismiss(None)
 
 
+class ConfirmModal(ModalScreen[bool]):
+    BINDINGS = [Binding("escape", "cancel", show=False)]
+
+    def __init__(self, title: str, desc: str) -> None:
+        super().__init__()
+        self.title_, self.desc = title, desc
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dlg"):
+            yield Label(self.title_, classes="dtitle")
+            yield Label(self.desc, classes="ddesc")
+            with Horizontal(classes="btns"):
+                yield Button("Отмена", id="cancel")
+                yield Button("Перезагрузить", id="ok", variant="error")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "ok")
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 def make_modal(item: Item, current: Optional[str]) -> ModalScreen:
     if item.prompt == "port":
         return InputModal("Порт SSH", "Введи новый порт SSH (1–65535).", current or "22", check_port)
@@ -718,11 +740,13 @@ class InstallScreen(Screen):
                     yield Static(self.line(item, value), classes="stext")
         with Horizontal(id="foot"):
             yield Label("", id="hint")
+            yield Button("Перезагрузить", id="reboot", variant="error")
             yield Button("Назад", id="back", variant="primary")
 
     def on_mount(self) -> None:
         self.app.installing = True
         self.query_one("#back").display = False
+        self.query_one("#reboot").display = False
         self.set_interval(0.08, self._spin)
         self.run_worker(self._run, thread=True)
 
@@ -764,6 +788,7 @@ class InstallScreen(Screen):
         self.query_one("#count", Label).update("готово")
         self.query_one("#hint", Label).update(
             f"Готово: установлено {ok}" + (f", с ошибками {failed}" if failed else ""))
+        self.query_one("#reboot").display = True
         back = self.query_one("#back")
         back.display = True
         back.focus()
@@ -772,8 +797,22 @@ class InstallScreen(Screen):
         if self.done:
             self.dismiss(self.results)
 
-    def on_button_pressed(self) -> None:
-        self.action_back()
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "reboot":
+            self.app.push_screen(
+                ConfirmModal("Перезагрузка", "Сервер перезагрузится сразу, ssh-сессия оборвётся."),
+                self._reboot)
+        else:
+            self.action_back()
+
+    def _reboot(self, confirmed: Optional[bool]) -> None:
+        if not confirmed:
+            return
+        if self.app.demo:
+            self.app.notify("Демо: перезагрузка пропущена")
+            return
+        subprocess.Popen(["systemctl", "reboot"])
+        self.app.exit()
 
 
 # --------------------------------------------------------------- приложение
@@ -794,7 +833,7 @@ class Linstall(App):
     .step { height: auto; padding: 0 2; }
     .icon { width: 3; height: auto; }
     .stext { width: 1fr; height: auto; }
-    InputModal, ChoiceModal { align: center middle; background: $background 60%; }
+    InputModal, ChoiceModal, ConfirmModal { align: center middle; background: $background 60%; }
     .dlg { width: 64; height: auto; max-height: 90%; border: round $accent; background: $surface; padding: 1 2; }
     .dtitle { color: $accent; text-style: bold; }
     .ddesc { color: $text-muted; margin-bottom: 1; }
