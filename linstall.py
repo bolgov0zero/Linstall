@@ -267,19 +267,11 @@ def run_neofetch(r, v):
         r.apt("fastfetch")
 
 
-def ensure_curl(r: Runner) -> None:
-    """curl есть не в каждой системе, а скрипты LinFW и Docker скачиваются им."""
-    if r.demo or not shutil.which("curl"):
-        r.apt("curl ca-certificates")
-
-
 def run_linfw(r, v):
-    ensure_curl(r)
     r.must(f"curl -fsSL {LINFW_URL} | bash")
 
 
 def run_docker(r, v):
-    ensure_curl(r)
     r.must("curl -fsSL https://get.docker.com | sh")
     r.must("docker compose version > /dev/null 2>&1 || apt-get install -y docker-compose-plugin")
 
@@ -299,6 +291,7 @@ class Item:
     label: Optional[Callable[[], str]] = None
     note: str = ""
     repeatable: bool = False
+    locked: bool = False     # обязательный пункт: если не установлен, отметка не снимается
 
     def command(self) -> str:
         return self.label() if self.label else self.cmd
@@ -347,9 +340,9 @@ def d_docker():
     return ok, None
 
 
-def package(section: str, name: str, desc: str, cmd: str, order: int = 40) -> Item:
+def package(section: str, name: str, desc: str, cmd: str, order: int = 40, locked: bool = False) -> Item:
     return Item(section, name, desc, lambda r, v: r.apt(cmd), order, cmd=cmd,
-                detect=lambda: (bool(shutil.which(cmd)), None))
+                detect=lambda: (bool(shutil.which(cmd)), None), locked=locked)
 
 
 SYS, UTIL, MON, SEC, DOCK = "НАСТРОЙКА СИСТЕМЫ", "БАЗОВЫЕ УТИЛИТЫ", "МОНИТОРИНГ", "БЕЗОПАСНОСТЬ", "DOCKER"
@@ -367,7 +360,7 @@ ITEMS = [
     Item(SYS, "Имя машины", "Меняет hostname. Имя вводится в окне.", run_host, 13,
          prompt="host", detect=d_host),
     Item(SYS, "BBR", "Включает TCP BBR для более быстрой сети.", run_bbr, 14, detect=d_bbr),
-    package(UTIL, "curl", "Запросы и загрузка файлов по HTTP.", "curl"),
+    package(UTIL, "curl", "Запросы и загрузка файлов по HTTP. Нужен LinFW и Docker.", "curl", order=1, locked=True),
     package(UTIL, "wget", "Скачивание файлов, умеет докачку.", "wget"),
     package(UTIL, "git", "Система контроля версий.", "git"),
     package(UTIL, "unzip", "Распаковка zip-архивов.", "unzip"),
@@ -532,6 +525,9 @@ class ItemRow(Widget, can_focus=True):
         if self.state == "on" and self.value:
             val.update(Text("→ " + self.value, style="yellow"))
             val.display = True
+        elif self.state == "on" and self.item.locked:
+            val.update(Text("обязательный пункт", style="dim"))
+            val.display = True
         elif self.current and self.item.prompt:
             val.update(Text("сейчас: " + self.current, style="dim"))
             val.display = True
@@ -539,7 +535,7 @@ class ItemRow(Widget, can_focus=True):
             val.display = False
 
     def apply_detect(self, ok: bool, value: Optional[str]) -> None:
-        self.base = "ok" if ok else ""
+        self.base = "ok" if ok else ("on" if self.item.locked else "")
         self.current = value
         if self.state != "on":
             self.state = self.base
@@ -547,6 +543,9 @@ class ItemRow(Widget, can_focus=True):
 
     def action_toggle(self) -> None:
         item = self.item
+        if self.state == "on" and item.locked:
+            self.app.notify("Обязательный пункт, снять нельзя")
+            return
         if self.state == "on":
             self.state, self.value = self.base, None
         elif self.state == "ok" and not item.prompt:
@@ -658,7 +657,7 @@ class MainScreen(Screen):
 
     def action_install(self) -> None:
         rows = sorted(self.selected(), key=lambda r: r.item.order)
-        if not rows:
+        if not any(not r.item.locked for r in rows):
             self.set_hint("Отметь хотя бы один пункт", error=True)
             return
         self.app.push_screen(InstallScreen([(r.item, r.value) for r in rows]), self._finished)
