@@ -776,6 +776,7 @@ class InstallScreen(Screen):
 
     def _finish(self, i: int, error: Optional[str]) -> None:
         item, value = self.jobs[i]
+        self.running = -1    # иначе таймер спиннера успеет затереть галочку
         icon = self.query(".icon").nodes[i]
         icon.update(Text("✔", style="bold green") if error is None else Text("✗", style="bold red"))
         self.query(".stext").nodes[i].update(self.line(item, value, error, finished=True))
